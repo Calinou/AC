@@ -3,6 +3,8 @@
 #include "cube.h"
 
 VARP(stencilshadow, 0, 40, 100);
+VARP(stencilshadowiterations, 1, 1, 8);
+FVARP(stencilshadowspread, 5.0f, 10.0f, 30.0f);
 
 int stenciling = 0;
 
@@ -315,126 +317,127 @@ static void rendershadowtiles()
 
 void drawstencilshadows()
 {
-    glDisable(GL_FOG);
-    glEnable(GL_STENCIL_TEST);
-    glDisable(GL_TEXTURE_2D);
+    for (int i = 0; i < stencilshadowiterations; i++) {
+        glDisable(GL_FOG);
+        glEnable(GL_STENCIL_TEST);
+        glDisable(GL_TEXTURE_2D);
 
-    glDepthMask(GL_FALSE);
-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+        glDepthMask(GL_FALSE);
+        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
-    stenciling = 1;
+        stenciling = i + 1;
 
-    shadowcasters = 0;
-    shadowx2 = shadowy2 = -1;
-    shadowx1 = shadowy1 = 1;
-    memset(shadowtiles, 0, sizeof(shadowtiles));
+        shadowcasters = 0;
+        shadowx2 = shadowy2 = -1;
+        shadowx1 = shadowy1 = 1;
+        memset(shadowtiles, 0, sizeof(shadowtiles));
 
-    if(hasST2 || hasSTS)
-    {
-        glDisable(GL_CULL_FACE);
-
-        if(hasST2)
+        if(hasST2 || hasSTS)
         {
-            glEnable(GL_STENCIL_TEST_TWO_SIDE_EXT);
+            glDisable(GL_CULL_FACE);
 
-            glActiveStencilFace_(GL_BACK);
-            glStencilFunc(GL_ALWAYS, 0, ~0U);
-            glStencilOp(GL_KEEP, GL_KEEP, hasSTW ? GL_INCR_WRAP_EXT : GL_INCR);
+            if(hasST2)
+            {
+                glEnable(GL_STENCIL_TEST_TWO_SIDE_EXT);
 
-            glActiveStencilFace_(GL_FRONT);
-            glStencilFunc(GL_ALWAYS, 0, ~0U);
-            glStencilOp(GL_KEEP, GL_KEEP, hasSTW ? GL_DECR_WRAP_EXT : GL_DECR);
+                glActiveStencilFace_(GL_BACK);
+                glStencilFunc(GL_ALWAYS, 0, ~0U);
+                glStencilOp(GL_KEEP, GL_KEEP, hasSTW ? GL_INCR_WRAP_EXT : GL_INCR);
+
+                glActiveStencilFace_(GL_FRONT);
+                glStencilFunc(GL_ALWAYS, 0, ~0U);
+                glStencilOp(GL_KEEP, GL_KEEP, hasSTW ? GL_DECR_WRAP_EXT : GL_DECR);
+            }
+            else
+            {
+                glStencilFuncSeparate_(GL_ALWAYS, GL_ALWAYS, 0, ~0U);
+                glStencilOpSeparate_(GL_BACK, GL_KEEP, GL_KEEP, hasSTW ? GL_INCR_WRAP_EXT : GL_INCR);
+                glStencilOpSeparate_(GL_FRONT, GL_KEEP, GL_KEEP, hasSTW ? GL_DECR_WRAP_EXT : GL_DECR);
+            }
+
+            startmodelbatches();
+            rendermapmodels();
+            renderentities();
+            renderclients();
+            renderbounceents();
+            endmodelbatches();
+
+            if(hasST2) glDisable(GL_STENCIL_TEST_TWO_SIDE_EXT);
+            glEnable(GL_CULL_FACE);
         }
         else
         {
-            glStencilFuncSeparate_(GL_ALWAYS, GL_ALWAYS, 0, ~0U);
-            glStencilOpSeparate_(GL_BACK, GL_KEEP, GL_KEEP, hasSTW ? GL_INCR_WRAP_EXT : GL_INCR);
-            glStencilOpSeparate_(GL_FRONT, GL_KEEP, GL_KEEP, hasSTW ? GL_DECR_WRAP_EXT : GL_DECR);
+            glStencilFunc(GL_ALWAYS, 0, ~0U);
+            glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
+
+            startmodelbatches();
+            rendermapmodels();
+            renderentities();
+            renderclients();
+            renderbounceents();
+            endmodelbatches(false);
+
+            if(shadowcasters)
+            {
+                stenciling = -1;
+
+                glStencilFunc(GL_ALWAYS, 0, ~0U);
+                glStencilOp(GL_KEEP, GL_KEEP, GL_DECR);
+                glCullFace(GL_BACK);
+
+                endmodelbatches(true);
+
+                glCullFace(GL_FRONT);
+            }
+            else clearmodelbatches();
         }
 
-        startmodelbatches();
-        rendermapmodels();
-        renderentities();
-        renderclients();
-        renderbounceents();
-        endmodelbatches();
+        stenciling = 0;
 
-        if(hasST2) glDisable(GL_STENCIL_TEST_TWO_SIDE_EXT);
-        glEnable(GL_CULL_FACE);
-    }
-    else
-    {
-        glStencilFunc(GL_ALWAYS, 0, ~0U);
-        glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
-
-        startmodelbatches();
-        rendermapmodels();
-        renderentities();
-        renderclients();
-        renderbounceents();
-        endmodelbatches(false);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glDepthMask(GL_TRUE);
 
         if(shadowcasters)
         {
-            stenciling = 2;
+            glDisable(GL_DEPTH_TEST);
 
-            glStencilFunc(GL_ALWAYS, 0, ~0U);
-            glStencilOp(GL_KEEP, GL_KEEP, GL_DECR);
-            glCullFace(GL_BACK);
+            glStencilFunc(GL_NOTEQUAL, (hasST2 || hasSTS) && !hasSTW ? 128 : 0, ~0U);
+            glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 
-            endmodelbatches(true);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_ZERO, GL_SRC_COLOR);
 
-            glCullFace(GL_FRONT);
+            float intensity = 1.0f - stencilshadow/100.0f/stencilshadowiterations;
+            glColor3f(intensity, intensity, intensity);
+
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            glOrtho(0, 1, 0, 1, -1, 1);
+
+            glMatrixMode(GL_MODELVIEW);
+            glPushMatrix();
+            glLoadIdentity();
+
+            rendershadowtiles();
+
+            glDisable(GL_BLEND);
+
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            setperspective(fovy, aspect, 0.15f, farplane);
+
+            glMatrixMode(GL_MODELVIEW);
+            glPopMatrix();
+
+            glEnable(GL_DEPTH_TEST);
         }
-        else clearmodelbatches();
-    }
 
-    stenciling = 0;
-
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glDepthMask(GL_TRUE);
-
-    if(shadowcasters)
-    {
-        glDisable(GL_DEPTH_TEST);
-
-        glStencilFunc(GL_NOTEQUAL, (hasST2 || hasSTS) && !hasSTW ? 128 : 0, ~0U);
+        // necessary to avoid ATI bug!
+        // punts to software mode if separate stencil op is set, even while stencil disabled, when drawing lines!
         glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_ZERO, GL_SRC_COLOR);
-
-        float intensity = 1.0f - stencilshadow/100.0f;
-        glColor3f(intensity, intensity, intensity);
-
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glOrtho(0, 1, 0, 1, -1, 1);
-
-        glMatrixMode(GL_MODELVIEW);
-        glPushMatrix();
-        glLoadIdentity();
-
-        rendershadowtiles();
-
-        glDisable(GL_BLEND);
-
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        setperspective(fovy, aspect, 0.15f, farplane);
-
-        glMatrixMode(GL_MODELVIEW);
-        glPopMatrix();
-
-        glEnable(GL_DEPTH_TEST);
+        glDisable(GL_STENCIL_TEST);
+        glEnable(GL_TEXTURE_2D);
+        glEnable(GL_FOG);
     }
-
-    // necessary to avoid ATI bug!
-    // punts to software mode if separate stencil op is set, even while stencil disabled, when drawing lines!
-    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-
-    glDisable(GL_STENCIL_TEST);
-    glEnable(GL_TEXTURE_2D);
-    glEnable(GL_FOG);
 }
-

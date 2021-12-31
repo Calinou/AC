@@ -53,7 +53,8 @@ extern int xtraverts;
 extern float fovy, aspect;
 extern int farplane;
 extern bool minimap, reflecting, refracting;
-extern int stenciling, stencilshadow, effective_stencilshadow;
+extern int stenciling, stencilshadow, stencilshadowiterations, effective_stencilshadow;
+extern float stencilshadowspread;
 extern bool intermission;
 extern int ispaused;
 extern int arenaintermission;
@@ -85,4 +86,3 @@ extern float waterlevel;
 #include "protos.h"                     // external function decls
 
 #endif
-

@@ -474,7 +474,7 @@ struct vertmodel : model
                 xtraverts += statlen;
                 return;
             }
-            else if(stenciling==1)
+            else if(stenciling>=1)
             {
                 bb curbb;
                 getcurbb(curbb, as, cur, prev, ai_t);
@@ -1328,4 +1328,3 @@ VARF(mdldyncache, 1, 2, 32, vertmodel::dynalloc.resize(mdldyncache<<20));
 VARF(mdlstatcache, 1, 1, 32, vertmodel::statalloc.resize(mdlstatcache<<20));
 
 modelcache vertmodel::dynalloc(mdldyncache<<20), vertmodel::statalloc(mdlstatcache<<20);
-
